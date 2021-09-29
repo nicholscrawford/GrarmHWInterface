@@ -1,5 +1,10 @@
-#ifndef SOME_HWINTERFACE
-#define SOME_HWINTERFACE
+#include <hardware_interface/joint_command_interface.h>
+#include <hardware_interface/joint_state_interface.h>
+#include <hardware_interface/robot_hw.h>
+#include <iostream>
+#include <controller_manager/controller_manager.h>
+#include <ros/ros.h>
+
 
 class MyRobot : public hardware_interface::RobotHW
 {
@@ -44,4 +49,29 @@ private:
   double eff[2];
 };
 
-#endif
+
+int main(int argc, char **argv)
+{
+  ros::init(argc, argv, "my_grarm");
+
+  MyRobot robot;
+  controller_manager::ControllerManager cm(&robot);
+
+  ros::AsyncSpinner spinner(1);
+  spinner.start();
+
+  ros::Time prev_time = ros::Time::now();
+  ros::Rate rate(10.0); // 10 Hz rate
+  
+  while (ros::ok())
+  {
+    const ros::Time time = ros::Time::now();
+    const ros::Duration period = time - prev_time;
+    
+    robot.read();
+    cm.update(time,period);
+    robot.write();
+    rate.sleep();
+  }
+  return 0;
+}
