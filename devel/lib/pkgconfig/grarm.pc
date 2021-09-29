@@ -1,0 +1,8 @@
+prefix=/home/nichols/ws_grarm/devel
+
+Name: grarm
+Description: Description of grarm
+Version: 0.0.0
+Cflags: -I/home/nichols/ws_grarm/src/grarm/include
+Libs: -L${prefix}/lib 
+Requires: controller_interface controller_manager controller_manager_msgs forward_command_controller joint_state_controller moveit_ros_control_interface moveit_simple_controller_manager position_controllers roscpp rospy std_msgs velocity_controllers

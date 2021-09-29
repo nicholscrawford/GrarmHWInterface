@@ -1,0 +1,4 @@
+#ifndef SOME_HWINTERFACE
+#define SOME_HWINTERFACE
+
+#endif
