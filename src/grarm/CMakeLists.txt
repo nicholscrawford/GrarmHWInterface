@@ -22,8 +22,8 @@ find_package(catkin REQUIRED COMPONENTS
   velocity_controllers
 )
 
-## System dependencies are found with CMake's conventions
-# find_package(Boost REQUIRED COMPONENTS system)
+## System dependencies are found with CMake's convention
+find_package(Boost REQUIRED COMPONENTS system)
 
 
 ## Uncomment this if the package has a setup.py. This macro ensures
@@ -115,7 +115,7 @@ catkin_package(
   INCLUDE_DIRS include
 #  LIBRARIES grarm
   CATKIN_DEPENDS controller_interface controller_manager controller_manager_msgs forward_command_controller joint_state_controller moveit_ros_control_interface moveit_simple_controller_manager position_controllers roscpp rospy std_msgs velocity_controllers
-#  DEPENDS system_lib
+#  DEPENDS system_lib CppLinuxSerial
 )
 
 ###########
@@ -128,7 +128,8 @@ include_directories(
   src
   include
   ${catkin_INCLUDE_DIRS}
-)
+  ## /home/nichols/code/CppLinuxSerial/include
+  )
 
 ## Declare a C++ library
 #add_library(${PROJECT_NAME} src/hwinterface.h)
@@ -156,6 +157,7 @@ add_dependencies(${PROJECT_NAME}_node ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catk
 ## Specify libraries to link a library or executable target against
 target_link_libraries(${PROJECT_NAME}_node
    ${catkin_LIBRARIES}
+   CppLinuxSerial
 )
 
 #############
