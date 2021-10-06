@@ -69,41 +69,59 @@ public:
  }
 
   void write(){
-    // std::cout<<"Writing Positions: " << cmd_pos[0] << ", " << cmd_pos[1] << ", " << cmd_pos[2] << "\n";
-    // std::cout<<"Writing Velocities: " << cmd_vel[0] << ", " << cmd_vel[1] << ", " << cmd_vel[2] << "\n";
     int gearboxRatio = 25;
-    int radToRotation = 0.159154943091;
+    double inverseGR = 0.04;
+    double radToRotation = 0.159154943091;
+    double rotationToRad = 6.2831853071796;
+    int pos_pos = 0;
+    int vel_pos = 0;
+    int torque_pos = 0;
     //For each joint in serial unit,
     for(int i = 0; i<3; i++){
-    //Get commanded position,
-    //Adjust units, compensate for gearbox, and LSB Val
-      double pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
-    //Convert to hex, LSB first
-      std::string hexPos = LSBSwitch(DecToHex(pos));
-    //Get commanded velocity,
-    //Adjust units, compensate for gearbox and LSB val
-      double vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
-    //Convert to hex, LSB first
-      std::string hexVel = LSBSwitch(DecToHex(vel));
-    //Build then send command
-      std::string cmd = "can send 800" + std::to_string(i) + "01000a0a20" + cmd_prevpos[i] + hexVel + "0926" + hexPos +"1b011100";
-      serialPortA.Write(cmd);
+      //Get commanded position,
+      //Adjust units, compensate for gearbox, and LSB Val
+      double current_cmd_pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
+      //Convert to hex, LSB first
+      std::string hexPos = LSBSwitch(DecToHex(current_cmd_pos));
+      //Get commanded velocity,
+      //Adjust units, compensate for gearbox and LSB val
+      double current_cmd_vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
+      //Convert to hex, LSB first
+      std::string hexVel = LSBSwitch(DecToHex(current_cmd_vel));
+      //Build then send command
+      std::string cmd = "can send 800" + std::to_string(i + 1) + "01000a0a20" + cmd_prevpos[i] + hexVel + "0926" + hexPos +"1b011100";
+      // cout<<"Writing cmd: " << cmd << "\n";
+      if(i < 3){
+	serialPortA.Write(cmd);
+      }
+      // else{
+      // 	serialPortB.Write(cmd);
+      // }
       cmd_prevpos[i] = hexPos;
-    // Read some data back (will block until at least 1 byte is received due to the SetTimeout(-1) call above)
+      // Read some data back (will block until at least 1 byte is received due to the SetTimeout(-1) call above)
       std::string readData;
-      serialPortA.Read(readData);
-
-    // For given set of pos/vel/torque
-    // Convert from lsb first to regular hex
-    // convert to dec,
-    // adjust for gearbox and lsb val
-    // store
+      if(i < 3){
+	serialPortA.Read(readData);
+      }
+      // else{
+      // 	serialPortB.Write(cmd);
+      // }
+      // cout <<"Reading: "<< readData << "\n";
+      // For given set of pos/vel/torque
+      // Convert from lsb first to regular hex
+      // convert to dec,
+      // adjust for gearbox and lsb val
+      // store
+      std::string read_hexPos = readData.substr(pos_pos, 8);
+      pos[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
+      std::string read_hexVel = readData.substr(vel_pos, 8);
+      vel[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
+      std::string read_hexTorque = readData.substr(torque_pos, 8);
+      eff[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.001 * 25;
+ 
     }
   }
    
-  // void read(){
-  //   std::cout<<"Reading.\n";
-  // }
   std::string DecToHex(long long dec)
   {
     long long n = dec;
@@ -292,14 +310,13 @@ int main(int argc, char **argv)
   spinner.start();
 
   ros::Time prev_time = ros::Time::now();
-  ros::Rate rate(10.0); // 10 Hz rate
+  ros::Rate rate(20.0); // 20 Hz rate
   
   while (ros::ok())
   {
     const ros::Time time = ros::Time::now();
     const ros::Duration period = time - prev_time;
     
-    // robot.read();
     cm.update(time,period);
     robot.write();
     rate.sleep();
