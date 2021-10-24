@@ -59,16 +59,29 @@ public:
 
    registerInterface(&jnt_pos_vel_interface);
 
-   mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyUSB0", mn::CppLinuxSerial::BaudRate::B_9600);
+   mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
    serialPortA.SetTimeout(-1);
    serialPortA.Open();
 
    // mn::CppLinuxSerial::SerialPort serialPortB("/dev/ttyUSB0", mn::CppLinuxSerial::BaudRate::B_9600);
    // serialPort.SetTimeout(-1);
    // serialPort.Open();
+
+   
+   double cmd_pos[6];
+   double cmd_vel[6];
+
+   for(int i = 0; i < 6; i++){
+     cmd_pos[i] = 0;
+     cmd_vel[i] = 0;
+   }			    
+   
  }
 
   void write(){
+    mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
+    serialPortA.SetTimeout(-1);
+    serialPortA.Open();
     int gearboxRatio = 25;
     double inverseGR = 0.04;
     double radToRotation = 0.159154943091;
@@ -76,23 +89,40 @@ public:
     int pos_pos = 0;
     int vel_pos = 0;
     int torque_pos = 0;
-    //For each joint in serial unit,
-    for(int i = 0; i<3; i++){
+    //For each joint in serial unit, temporarily incremented to the second joint
+    for(int i = 1; i<3; i++){
+      std::cout << "Cmd Pos: " << cmd_pos[i] << "\n";
+      std::cout << "Cmd Vel: " << cmd_vel[i] << "\n";
       //Get commanded position,
       //Adjust units, compensate for gearbox, and LSB Val
-      double current_cmd_pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
+      long long current_cmd_pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
       //Convert to hex, LSB first
       std::string hexPos = LSBSwitch(DecToHex(current_cmd_pos));
       //Get commanded velocity,
       //Adjust units, compensate for gearbox and LSB val
-      double current_cmd_vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
+      //long long current_cmd_vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
+      long long current_cmd_vel = 0.3 * gearboxRatio * radToRotation * 100000;
+
       //Convert to hex, LSB first
       std::string hexVel = LSBSwitch(DecToHex(current_cmd_vel));
       //Build then send command
-      std::string cmd = "can send 800" + std::to_string(i + 1) + "01000a0a20" + cmd_prevpos[i] + hexVel + "0926" + hexPos +"1b011100";
-      // cout<<"Writing cmd: " << cmd << "\n";
+      std::string cmd = "can send 800" + std::to_string(i) + " 01000a0a20" + "00000080" + hexVel + "0926" + hexPos +"1b011100" + "\n";
+      std::cout<<"Writing cmd: " << cmd << "\n";
       if(i < 3){
 	serialPortA.Write(cmd);
+      }
+
+      ///FOR DEBUGGING/////
+      if(cmd_pos[i] > 6.3 || cmd_vel[i] > 6.3){
+	std::cout << "CMD POS OR VEL TOO LARGE!!! POS: " << cmd_pos[i] << " VEL: " << cmd_vel[i] << "\n";
+	pos[i] = 0;
+	vel[i] = 0;
+	//cmd_pos[i] = 0;
+	//cmd_vel[i] = 0;
+      }
+      else{
+	pos[i] = cmd_pos[i];
+	vel[i] = cmd_vel[i];
       }
       // else{
       // 	serialPortB.Write(cmd);
@@ -103,6 +133,7 @@ public:
       if(i < 3){
 	serialPortA.Read(readData);
       }
+      std::cout << readData << "\n";
       // else{
       // 	serialPortB.Write(cmd);
       // }
@@ -112,12 +143,12 @@ public:
       // convert to dec,
       // adjust for gearbox and lsb val
       // store
-      std::string read_hexPos = readData.substr(pos_pos, 8);
-      pos[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
-      std::string read_hexVel = readData.substr(vel_pos, 8);
-      vel[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
-      std::string read_hexTorque = readData.substr(torque_pos, 8);
-      eff[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.001 * 25;
+      // std::string read_hexPos = readData.substr(pos_pos, 8);
+      // pos[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
+      // std::string read_hexVel = readData.substr(vel_pos, 8);
+      // vel[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
+      // std::string read_hexTorque = readData.substr(torque_pos, 8);
+      // eff[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.001 * 25;
  
     }
   }
@@ -199,6 +230,9 @@ public:
       break;
 	  
     default:
+      std::cout << "Length: " << finalString.length() << "\n";
+      std::cout << "String: " << finalString << "\n";
+      return "00000000";
       assert(finalString.length() <= 8);
       break;
     }
