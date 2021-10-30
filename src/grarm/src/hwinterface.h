@@ -80,15 +80,15 @@ public:
 
   void write(){
     mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
-    serialPortA.SetTimeout(-1);
+    serialPortA.SetTimeout(1000);
     serialPortA.Open();
     int gearboxRatio = 25;
     double inverseGR = 0.04;
     double radToRotation = 0.159154943091;
     double rotationToRad = 6.2831853071796;
-    int pos_pos = 0;
-    int vel_pos = 0;
-    int torque_pos = 0;
+    int pos_pos = 12;
+    int vel_pos = 20;
+    int torque_pos = 28;
     //For each joint in serial unit, temporarily incremented to the second joint
     for(int i = 1; i<3; i++){
       std::cout << "Cmd Pos: " << cmd_pos[i] << "\n";
@@ -108,7 +108,7 @@ public:
       //Build then send command
       std::string cmd = "can send 800" + std::to_string(i) + " 01000a0a20" + "00000080" + hexVel + "0926" + hexPos +"1b011100" + "\n";
       std::cout<<"Writing cmd: " << cmd << "\n";
-      if(i < 3){
+      if(i <= 3){
 	serialPortA.Write(cmd);
       }
 
@@ -120,19 +120,23 @@ public:
 	//cmd_pos[i] = 0;
 	//cmd_vel[i] = 0;
       }
-      else{
-	pos[i] = cmd_pos[i];
-	vel[i] = cmd_vel[i];
-      }
       // else{
       // 	serialPortB.Write(cmd);
       // }
       cmd_prevpos[i] = hexPos;
       // Read some data back (will block until at least 1 byte is received due to the SetTimeout(-1) call above)
       std::string readData;
-      if(i < 3){
-	serialPortA.Read(readData);
+      if(i <= 3){
+	while(true){
+	  serialPortA.Read(readData);
+	  std::cout<<"READ: " <<readData<< "\n";
+	  if(readData.find("rcv") != std::string::npos){
+	    readData = readData.substr(readData.find("rcv"), readData.length());
+	    break;
+	  }
+	}
       }
+      std::cout << "####Data Out####\n";
       std::cout << readData << "\n";
       // else{
       // 	serialPortB.Write(cmd);
@@ -143,12 +147,18 @@ public:
       // convert to dec,
       // adjust for gearbox and lsb val
       // store
-      // std::string read_hexPos = readData.substr(pos_pos, 8);
-      // pos[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
-      // std::string read_hexVel = readData.substr(vel_pos, 8);
-      // vel[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
-      // std::string read_hexTorque = readData.substr(torque_pos, 8);
-      // eff[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.001 * 25;
+      std::string read_hexPos = readData.substr(pos_pos, 8);
+      std::cout << "Motor's Reported Position: " << HexToDec(LSBSwitch(read_hexPos)) << "\n";
+      std::cout <<"Output Position: " << HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad << "\n";
+      pos[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
+      std::string read_hexVel = readData.substr(vel_pos, 8);
+      std::cout << "Motor's Reported Velocity: " << HexToDec(LSBSwitch(read_hexVel)) << "\n";
+      std::cout <<"Output Velocity: " << HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad << "\n";
+      vel[i] = HexToDec(LSBSwitch(read_hexVel)) * 0.00001 * inverseGR * rotationToRad;
+      std::string read_hexTorque = readData.substr(torque_pos, 8);
+      std::cout << "Motor's Reported Torque: " << HexToDec(LSBSwitch(read_hexTorque)) << "\n";
+      std::cout <<"Output Torque: " << HexToDec(LSBSwitch(read_hexTorque)) * 0.001 * 25 << "\n";
+      eff[i] = HexToDec(LSBSwitch(read_hexTorque)) * 0.001 * 25;
  
     }
   }
@@ -344,7 +354,7 @@ int main(int argc, char **argv)
   spinner.start();
 
   ros::Time prev_time = ros::Time::now();
-  ros::Rate rate(20.0); // 20 Hz rate
+  ros::Rate rate(40.0); // 30 Hz rate
   
   while (ros::ok())
   {
