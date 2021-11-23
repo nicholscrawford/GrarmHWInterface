@@ -10,6 +10,7 @@
 #include <algorithm>
 #include <cassert>
 #include <cstring>
+#include <stdlib.h>     /* abs */
 
 
 class MyRobot : public hardware_interface::RobotHW
@@ -60,7 +61,7 @@ public:
    registerInterface(&jnt_pos_vel_interface);
 
    mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
-   serialPortA.SetTimeout(-1);
+   serialPortA.SetTimeout(10);
    serialPortA.Open();
 
    // mn::CppLinuxSerial::SerialPort serialPortB("/dev/ttyUSB0", mn::CppLinuxSerial::BaudRate::B_9600);
@@ -78,10 +79,7 @@ public:
    
  }
 
-  void write(){
-    mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
-    serialPortA.SetTimeout(1000);
-    serialPortA.Open();
+  void write(mn::CppLinuxSerial::SerialPort &serialPortA){
     int gearboxRatio = 25;
     double inverseGR = 0.04;
     double radToRotation = 0.159154943091;
@@ -89,10 +87,12 @@ public:
     int pos_pos = 12;
     int vel_pos = 20;
     int torque_pos = 28;
+    //Print commanded positions
+    std::cout << "POSITIONS: " << cmd_pos[1] << ", " << cmd_pos[2] << ", " << cmd_pos[3] << ", "  << cmd_pos[4] << ", "  << cmd_pos[5] <<"\n";
+    std::cout << "VELOCITY: " << cmd_vel[1] << ", " << cmd_vel[2] << ", " << cmd_vel[3] << ", "  << cmd_vel[4] << ", "  << cmd_vel[5] << "\n";
+    
     //For each joint in serial unit, temporarily incremented to the second joint
-    for(int i = 1; i<3; i++){
-      std::cout << "Cmd Pos: " << cmd_pos[i] << "\n";
-      std::cout << "Cmd Vel: " << cmd_vel[i] << "\n";
+    for(int i = 1; i<=1; i++){
       //Get commanded position,
       //Adjust units, compensate for gearbox, and LSB Val
       long long current_cmd_pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
@@ -101,24 +101,29 @@ public:
       //Get commanded velocity,
       //Adjust units, compensate for gearbox and LSB val
       //long long current_cmd_vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
-      long long current_cmd_vel = 0.3 * gearboxRatio * radToRotation * 100000;
+      long long current_cmd_vel = abs(cmd_vel[i]) * gearboxRatio * radToRotation * 100000;
 
       //Convert to hex, LSB first
       std::string hexVel = LSBSwitch(DecToHex(current_cmd_vel));
       //Build then send command
-      std::string cmd = "can send 800" + std::to_string(i) + " 01000a0a20" + "00000080" + hexVel + "0926" + hexPos +"1b011100" + "\n";
+      //Position Sent is stop position command
+      //std::string cmd = "can send 800" + std::to_string(i) + " 01000a0a20" + "00000080" + hexVel + "0926" + hexPos +"1b011100" + "\n";
+      //Position sent is current pos, no stop pos.
+      std::string cmd = "can send 800" + std::to_string(i) + " 01000a0a20" + hexPos + hexVel +"1b011100" + "\n";
       std::cout<<"Writing cmd: " << cmd << "\n";
       if(i <= 3){
 	serialPortA.Write(cmd);
       }
-
+      else{
+	//serialPortB.Write(cmd);
+      }
       ///FOR DEBUGGING/////
       if(cmd_pos[i] > 6.3 || cmd_vel[i] > 6.3){
 	std::cout << "CMD POS OR VEL TOO LARGE!!! POS: " << cmd_pos[i] << " VEL: " << cmd_vel[i] << "\n";
 	pos[i] = 0;
 	vel[i] = 0;
-	//cmd_pos[i] = 0;
-	//cmd_vel[i] = 0;
+	cmd_pos[i] = 0;
+	cmd_vel[i] = 0;
       }
       // else{
       // 	serialPortB.Write(cmd);
@@ -129,15 +134,25 @@ public:
       if(i <= 3){
 	while(true){
 	  serialPortA.Read(readData);
-	  std::cout<<"READ: " <<readData<< "\n";
+	  // std::cout<<"READ: " <<readData<< "\n";
 	  if(readData.find("rcv") != std::string::npos){
 	    readData = readData.substr(readData.find("rcv"), readData.length());
 	    break;
 	  }
 	}
       }
-      std::cout << "####Data Out####\n";
-      std::cout << readData << "\n";
+      else{
+	while(true){
+	  //serialPortB.Read(readData);
+	  //std::cout<<"READ: " <<readData<< "\n";
+	  if(readData.find("rcv") != std::string::npos){
+	    readData = readData.substr(readData.find("rcv"), readData.length());
+	    break;
+	  }
+	}
+      }
+      // std::cout << "####Data Out####\n";
+      // std::cout << readData << "\n";
       // else{
       // 	serialPortB.Write(cmd);
       // }
@@ -148,16 +163,16 @@ public:
       // adjust for gearbox and lsb val
       // store
       std::string read_hexPos = readData.substr(pos_pos, 8);
-      std::cout << "Motor's Reported Position: " << HexToDec(LSBSwitch(read_hexPos)) << "\n";
-      std::cout <<"Output Position: " << HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad << "\n";
+      // std::cout << "Motor's Reported Position: " << HexToDec(LSBSwitch(read_hexPos)) << "\n";
+      // std::cout <<"Output Position: " << HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad << "\n";
       pos[i] = HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad;
       std::string read_hexVel = readData.substr(vel_pos, 8);
-      std::cout << "Motor's Reported Velocity: " << HexToDec(LSBSwitch(read_hexVel)) << "\n";
-      std::cout <<"Output Velocity: " << HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad << "\n";
+      // std::cout << "Motor's Reported Velocity: " << HexToDec(LSBSwitch(read_hexVel)) << "\n";
+      // std::cout <<"Output Velocity: " << HexToDec(LSBSwitch(read_hexPos)) * 0.00001 * inverseGR * rotationToRad << "\n";
       vel[i] = HexToDec(LSBSwitch(read_hexVel)) * 0.00001 * inverseGR * rotationToRad;
       std::string read_hexTorque = readData.substr(torque_pos, 8);
-      std::cout << "Motor's Reported Torque: " << HexToDec(LSBSwitch(read_hexTorque)) << "\n";
-      std::cout <<"Output Torque: " << HexToDec(LSBSwitch(read_hexTorque)) * 0.001 * 25 << "\n";
+      // std::cout << "Motor's Reported Torque: " << HexToDec(LSBSwitch(read_hexTorque)) << "\n";
+      // std::cout <<"Output Torque: " << HexToDec(LSBSwitch(read_hexTorque)) * 0.001 * 25 << "\n";
       eff[i] = HexToDec(LSBSwitch(read_hexTorque)) * 0.001 * 25;
  
     }
@@ -240,8 +255,8 @@ public:
       break;
 	  
     default:
-      std::cout << "Length: " << finalString.length() << "\n";
-      std::cout << "String: " << finalString << "\n";
+      //std::cout << "Length: " << finalString.length() << "\n";
+      //std::cout << "String: " << finalString << "\n";
       return "00000000";
       assert(finalString.length() <= 8);
       break;
@@ -354,15 +369,22 @@ int main(int argc, char **argv)
   spinner.start();
 
   ros::Time prev_time = ros::Time::now();
-  ros::Rate rate(40.0); // 30 Hz rate
-  
+  ros::Rate rate(400.0); // 30 Hz rate
+
+  mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
+  //mn::CppLinuxSerial::SerialPort serialPortB("/dev/ttyACM1", mn::CppLinuxSerial::BaudRate::B_9600);
+  serialPortA.SetTimeout(1000);
+  //serialPortB.SetTimeout(1000);
+  serialPortA.Open();
+  //serialPortB.Open();
+
   while (ros::ok())
   {
     const ros::Time time = ros::Time::now();
     const ros::Duration period = time - prev_time;
     
     cm.update(time,period);
-    robot.write();
+    robot.write(serialPortA);
     rate.sleep();
   }
   return 0;
