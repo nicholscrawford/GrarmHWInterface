@@ -96,12 +96,14 @@ public:
       //Get commanded position,
       //Adjust units, compensate for gearbox, and LSB Val
       long long current_cmd_pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
+
       //Convert to hex, LSB first
       std::string hexPos = LSBSwitch(DecToHex(current_cmd_pos));
+
       //Get commanded velocity,
       //Adjust units, compensate for gearbox and LSB val
       //long long current_cmd_vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
-      long long current_cmd_vel = abs(cmd_vel[i]) * gearboxRatio * radToRotation * 100000;
+      long long current_cmd_vel = cmd_vel[i] * gearboxRatio * radToRotation * 100000;
 
       //Convert to hex, LSB first
       std::string hexVel = LSBSwitch(DecToHex(current_cmd_vel));
@@ -252,6 +254,8 @@ public:
       break;
     case(7):
       finalString = "0" + finalString;
+      break;
+    case(8):
       break;
 	  
     default:
