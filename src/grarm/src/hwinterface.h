@@ -79,7 +79,7 @@ public:
    
  }
 
-  void write(mn::CppLinuxSerial::SerialPort &serialPortA){
+  void write(mn::CppLinuxSerial::SerialPort &serialPortA, mn::CppLinuxSerial::SerialPort &serialPortB){
     int gearboxRatio = 25;
     double inverseGR = 0.04;
     double radToRotation = 0.159154943091;
@@ -92,7 +92,7 @@ public:
     std::cout << "VELOCITY: " << cmd_vel[1] << ", " << cmd_vel[2] << ", " << cmd_vel[3] << ", "  << cmd_vel[4] << ", "  << cmd_vel[5] << "\n";
     
     //For each joint in serial unit, temporarily incremented to the second joint
-    for(int i = 1; i<=1; i++){
+    for(int i = 1; i<=5; i++){
       //Get commanded position,
       //Adjust units, compensate for gearbox, and LSB Val
       long long current_cmd_pos = cmd_pos[i] * gearboxRatio * radToRotation * 100000;
@@ -117,7 +117,7 @@ public:
 	serialPortA.Write(cmd);
       }
       else{
-	//serialPortB.Write(cmd);
+	serialPortB.Write(cmd);
       }
       ///FOR DEBUGGING/////
       if(cmd_pos[i] > 6.3 || cmd_vel[i] > 6.3){
@@ -127,9 +127,9 @@ public:
 	cmd_pos[i] = 0;
 	cmd_vel[i] = 0;
       }
-      // else{
-      // 	serialPortB.Write(cmd);
-      // }
+      else{
+	serialPortB.Write(cmd);
+      }
       cmd_prevpos[i] = hexPos;
       // Read some data back (will block until at least 1 byte is received due to the SetTimeout(-1) call above)
       std::string readData;
@@ -145,7 +145,7 @@ public:
       }
       else{
 	while(true){
-	  //serialPortB.Read(readData);
+	  serialPortB.Read(readData);
 	  //std::cout<<"READ: " <<readData<< "\n";
 	  if(readData.find("rcv") != std::string::npos){
 	    readData = readData.substr(readData.find("rcv"), readData.length());
@@ -376,11 +376,11 @@ int main(int argc, char **argv)
   ros::Rate rate(400.0); // 30 Hz rate
 
   mn::CppLinuxSerial::SerialPort serialPortA("/dev/ttyACM0", mn::CppLinuxSerial::BaudRate::B_9600);
-  //mn::CppLinuxSerial::SerialPort serialPortB("/dev/ttyACM1", mn::CppLinuxSerial::BaudRate::B_9600);
+  mn::CppLinuxSerial::SerialPort serialPortB("/dev/ttyACM1", mn::CppLinuxSerial::BaudRate::B_9600);
   serialPortA.SetTimeout(1000);
-  //serialPortB.SetTimeout(1000);
+  serialPortB.SetTimeout(1000);
   serialPortA.Open();
-  //serialPortB.Open();
+  serialPortB.Open();
 
   while (ros::ok())
   {
@@ -388,7 +388,7 @@ int main(int argc, char **argv)
     const ros::Duration period = time - prev_time;
     
     cm.update(time,period);
-    robot.write(serialPortA);
+    robot.write(serialPortA, serialPortB);
     rate.sleep();
   }
   return 0;
